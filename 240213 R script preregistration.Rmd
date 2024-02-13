@@ -1,0 +1,694 @@
+---
+title: "Preregistration DS research"
+author: "John Meeuwsen"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Introduction
+In this Rmarkdown file, we'll describe the intended analysis of the Data Science research project. 
+
+## Load libraries 
+
+```{r, message = FALSE}
+library(dplyr)    # Likert scale to numeric
+library(HH)       # Plotting likert scale
+library(likert)   # Make likert table
+library(ltm)      # Evaluating questionnaire with cronbach's alpha
+library(ggpubr)   # Plot paired data
+library(Hmisc)    # Correlation matrix
+library(corrplot) # Plot correlation matrix
+library(tableone) # TableOne
+library(tidyr)    # Data manipulation
+library(purrr)    # Data manipulation
+```
+  
+## Load pseudonimized data  
+```{r}
+# df <- read.csv("dfpseudonimized.csv")
+df <- read.csv2("231212 Example data.csv")
+example <- df
+# head(df)
+```
+
+
+## Descriptive statistics exams
+### Exam Onderzoeksmethoden
+```{r }
+# Plot data
+hist(df$testOZM_exam)
+
+# Summary of data
+summary(df$testOZM_exam)
+sd(df$testOZM_exam)
+
+# Report cronbach’s alpha, p, p’, Rir and Rit (already known) 
+
+# Percentage > 5.5 (expectation is 50-90% above 5.5)
+length(df[df$testOZM_exam >= 5.5,]) / length(df$testOZM_exam) * 100
+
+```
+
+### Formative exam Bioinformatics
+```{r }
+# Plot data
+hist(df$testBI_form)
+
+# Summary of data
+summary(df$testBI_form)
+sd(df$testBI_form)
+
+# Report cronbach’s alpha, p, p’, Rir and Rit (already known - in another Excel file)
+
+# Percentage > 5.5 (expectation is 10-50% above 5.5)
+length(df[df$testBI_form >= 5.5,]) / length(df$testBI_form) * 100
+```
+
+### Final exam Bioinformatics
+```{r }
+# Plot data
+hist(df$testBI_exam)
+
+# Summary of data
+summary(df$testBI_exam)
+sd(df$testBI_exam)
+
+# Report cronbach’s alpha, p, p’, Rir and Rit (already known)
+
+# Calculate percentage above 5.5
+sum(df[df$testBI_exam >= 5.5,])
+
+# Make subset of students that are 80% or more present and have a motivation of 4 or higher
+students_mot_pres <- df[df$presence >= 80 & df$motivation >= 4,]
+
+# Calculate percentage above 5.5 of this subset
+length(df[students_mot_pres$testBI_exam >= 5.5,]) / length(df$testBI_exam) * 100
+
+```
+
+### Retention exam Bioinformatics
+```{r }
+# Plot data
+hist(df$testBI_retention)
+
+# Summary of data
+summary(df$testBI_retention)
+sd(df$testBI_retention)
+
+# Report cronbach’s alpha, p, p’, Rir and Rit (already known)
+
+# Calculate percentage above 5.5
+length(df[df$testBI_retention >= 5.5,]) / length(df$testBI_retention) * 100
+
+```
+
+
+
+## Data from questionnaire 
+```{r}
+# Make a 'lookup_table' (check values per variable, note variables that are formulated in the opposite direction!)
+lookup_table <- c("Helemaal sterk van toepassing" = 7,
+                  "6" = 6,
+                  "5" = 5,
+                  "4" = 4,
+                  "3" = 3,
+                  "2" = 2,
+                  "Helemaal niet van toepassing" = 1)
+
+# Questions in 'regular' direction:
+# q1....
+
+lookup_table_opposite <- c("Helemaal sterk van toepassing" = 1,
+                           "2" = 2,
+                           "3" = 3,
+                           "4" = 4,
+                           "5" = 5,
+                           "6" = 6,
+                           "Helemaal niet van toepassing" = 7)
+
+# Questions in opposite direction:
+# q...
+
+# Replace 'regular' values in the df with 'lookup table'.
+#df_scores <- df %>%
+#  mutate(q1 = lookup_table[q1],
+#         q2 = lookup_table[q2],
+#         q3 = lookup_table[q3],
+#         q4 = lookup_table[q4],
+#         q5 = lookup_table[q5],
+#         q6 = lookup_table[q6],
+#         q7 = lookup_table[q7],
+#         q8 = lookup_table[q8],
+#         q9 = lookup_table[q9],
+#         q10 = lookup_table[q10])
+
+# Replace 'opposite' values in the df with 'lookup table_opposite'.
+#df_scores <- df %>%
+#  mutate(q11 = lookup_table_opposite[q11],
+#         q12 = lookup_table[q12],
+#         q13 = lookup_table[q13],
+#         q14 = lookup_table[q14],
+#         q15 = lookup_table[q15],
+#         q16 = lookup_table[q16],
+#         q17 = lookup_table[q17],
+#         q18 = lookup_table[q18],
+#         q19 = lookup_table[q19],
+#         q20 = lookup_table[q20])
+
+# Print new table
+head(df)
+```
+
+### Combine data from individual questions to factors
+Check visually for missing data. We will determine whether a subject is included in the analysis for each subscale separately and have no exclusion criterion for the entire questionnaire. So, if a subject would only answer sufficient questions for 1 of the 17 subscales, the answers of this subject would be used for the analysis of this subscale.
+For each subscale analysis: if for a subject > 66% of the quantitative questions is missing, the subject will be excluded from analysis of this subscale. For example, if a student fills in only 1 of 3 questions from a subscale, this answer will not be included in the analyses of this subscale. 
+```{r}
+
+# General:
+# Calculate row means for rows with more than 66% of data available
+threshold <- 0.66  # Set the threshold for the percentage of available data
+
+
+# Motivatie
+## Intrinsieke waarde
+#df$Mot_intrinsiek <- rowMeans(df[,c("q10", "q11", "q12")])
+
+## Taakwaardering
+#df$Mot_taakwaardering <- rowMeans(df[,c("q13", "q14", "q15", "q16", "q17", "q18")])
+
+## Zelfeffectiviteit
+#df$Mot_zelfeffectiviteit <- rowMeans(df[,c("q19", "q20", "q21", "q22", "q23", "q24", "q25", "q26")])
+
+## Testangst
+#df$Mot_testangst <- rowMeans(df[,c("q27", "q28", "q29")])
+
+# Zelfregulatie
+#df$Zelfregulatie <- rowMeans(df[,c("q30", "q31", "q32", "q33", "q34", "q35", "q36", "q37", "q38")])
+
+# Attitude
+## Affect
+#df$Att_affect <- rowMeans(df[,c("q39", "q40", "q41", "q42", "q43", "q44")])
+
+## Taakwaardering statistiek
+#df$Att_taakwaarderingstat <- rowMeans(df[,c("q45", "q46", "q47", "q48", "q49", "q50", "q51")])
+
+## Cognitieve competentie
+#df$Att_cogn_comp <- rowMeans(df[,c("q52", "q53", "q54", "q55", "q56")])
+
+## Moeilijkheid
+#df$Att_moeilijkheid <- rowMeans(df[,c("q57", "q58", "q59","q60", "q61")])
+
+# Cognitive load
+## Intrinsiek
+#df$Cognload_intr <- mean(df[,c("q62", "q63", "q64")])
+
+## Extrinsiek
+#df$Cognload_extr <- mean(df[,c("q65", "q66", "q67")])
+
+## Germane
+#df$Cognload_germane <- mean(df[,c("q68", "q69", "q70", "q71")])
+
+
+# Zelfbeschikking
+#df$zelfbeschikking <- mean(df[,c("q72", "q73", "q74", "q75", "q76", "q77",
+#                              "q78", "q79", "q80", "q81", "q82", "q83")])
+
+
+# Experienced learning outcomes
+# Transfer
+transfer <- c("q1", "q2", "q3")
+vrows_transfer <- rowMeans(!is.na(df[,transfer])) > threshold  # Logical index for valid rows
+rows_transfer <- rowMeans(df[vrows_transfer, transfer], na.rm = TRUE)
+
+## Context - context
+df$transfer_context_mean <- rowMeans(df[,c("q1", "q2", "q3")])
+df$transfer_context_sd <- apply(df[,c("q1", "q2", "q3")], 1, sd)
+## Concept - context
+df$transfer_concept_mean <- rowMeans(df[,c("q4", "q5", "q6")])
+df$transfer_concept_sd <- apply(df[,c("q4", "q5", "q6")], 1, sd)
+
+## Simpel - complex
+#df$transfer_complex <- rowMeans(df[,c("q7", "q8", "q9")])
+
+
+```
+
+### Descriptive statistics of questions and factors
+```{r}
+# Determine average and SD for individual questions
+
+
+# Determine average, SD, range and nr of missings for scales
+
+
+```
+
+### Determine internal consistancy of questions within factors
+```{r}
+# library
+require(ltm)
+
+# select data for transfer_context
+sample_data <- sapply(df[,c("q1", "q2", "q3")], as.numeric)
+sample_data
+class(sample_data)
+
+# calculate cronbach's alpha
+cronbach.alpha(sample_data, na.rm = TRUE)
+
+# Identical for all other factors
+```
+
+
+
+### Plot question sets on likert scale with stacked bar chart
+```{r}
+# Select questions to plot and data with info on likert scale
+# Code derived from: https://www.r-bloggers.com/2012/12/plotting-likert-scales/
+
+# Question set of interest 1 (motivation for example)
+table_q1 <- data.frame(table(example$q1))
+table_q2 <- data.frame(table(example$q2))
+table_q3 <- data.frame(table(example$q3))
+motivation12 <- merge(table_q1, table_q2, by = 'Var1')
+motivation123 <- merge(motivation12, table_q3, by = 'Var1')
+colnames(motivation123) <- c("likert","q1","q2","q3")
+
+# transpose dataset
+sgbar.likert1<- data.frame(t(motivation123[,2:4]))
+
+plot.likert(sgbar.likert1,
+       main='Motivation',
+       sub="Likert Scale")
+
+# Expectations of average values for likert scales:
+# Motivation -- task value >= 4
+# Motivation -- Self-efficacy >=
+# Attitude -- task value >= 4
+# Cognitive load -- extrinsic <= 4
+# Cognitive load -- germane >= 4
+
+# Question of interest 2 (task value)
+table_q1 <- data.frame(table(example$q1))
+table_q2 <- data.frame(table(example$q2))
+table_q3 <- data.frame(table(example$q3))
+motivation12 <- merge(table_q1, table_q2, by = 'Var1')
+motivation123 <- merge(motivation12, table_q3, by = 'Var1')
+colnames(motivation123) <- c("likert","q1","q2","q3")
+
+sgbar.likert1<- data.frame(t(motivation123[,2:4]))
+
+plot.likert(sgbar.likert1,
+       main='Motivation',
+       sub="Likert Scale")
+
+
+# Identical for other factors
+```
+
+
+
+## Inferential statistics
+### OZM Exam and Formative test BI
+- Difference in scores between Final exam OZM and formative exam BI (paired t-test on grades for R and statistics) 
+We expect a decrease in the student grade of BI in comparison to OZM. Expected decrease between 0-8 (0-10 scale). 
+```{r}
+# Descriptives from relevant variables
+summary(example$testOZM_exam)
+summary(example$testBI_form)
+
+# Plot final exam OZM and formative exam BI
+ggpaired(example, cond1 = "testOZM_exam", cond2 = "testBI_form",
+    fill = "condition", palette = "jco")
+
+# Plot score differences (boxplot + raw datapoints)
+boxplot(example$testBI_form - example$testOZM_exam)
+stripchart(example$testBI_form - example$testOZM_exam, vertical = TRUE, method = "jitter", add = TRUE, pch = 19)
+
+# Visual inspection of normality in mean_difference and homogeneity of variance. 
+# When doubt, perform statistical test for:
+# 1. normality of mean_difference 
+# 1.1 plot: 
+hist(example$testOZM_exam - example$testBI_form)
+# 1.2 shapiro test (p > 0.05 >> assume means normally distributed)
+shapiro.test(example$testOZM_exam - example$testBI_form)
+
+# 2. homogeneity of variances (p > 0.05 >> assume homogeneity of variances)
+# 2.1 plot:
+plot(example$testOZM_exam, example$testBI_form)
+# 2.2 variance test:
+var.test(example$testOZM_exam, example$testBI_form)
+
+# Paired t-test for difference in means between exam OZM and formative exam BI
+t.test(example$testOZM_exam, example$testBI_form, paired = TRUE)
+
+# NB When assumptions are violated, we will perform a non-parametric test (mann-whitney U)
+wilcox.test(example$testOZM_exam, example$testBI_form)
+
+# Interpret if difference is comparable to expected ( 0 - 8 points decrease from exam OZM to formative exam BI)
+# In this example, the mean decrease is 2.35, this is within the expected range of 0 - 8.
+
+```
+
+### Final exam BI and retention test BI  
+- Difference in scores between Final exam BI and retention test BI (paired t-test on grades for R and statistics)   
+- Our aim for succesful implementation of the learning progression is that the grade of the students will  on average decrease 0-3 points (0-10 scale).   
+- We expect a decrease in the student grade of retention test BI in comparison to final exam BI. Expected average decrease between 0-6 (0-10 scale).   
+
+```{r}
+# Note!!, careful with interpretation because of limited participants in retention test
+# Descriptives from relevant variables
+summary(example$testBI_exam)
+summary(example$testBI_retention)
+
+# Plot final exam OZM and formative exam BI
+ggpaired(example, cond1 = "testBI_exam", cond2 = "testBI_retention",
+    fill = "condition", palette = "jco")
+
+# Paired t-test for difference in means between exam OZM and formative exam BI
+t.test(example$testBI_exam, example$testBI_retention, paired = TRUE)
+
+# Interpretation
+# In this example, the mean decrease is 2.57, this is within the expected range of 0 - 6.
+# In this example, the mean decrease is also within the range of our aim (0-3 decrease)
+```
+
+### Correlations between Exams and process variables - overview
+Linear relation between process variables and test scores of 1) Final exam OZM; 2) Formative exam start BI; 3) Final exam BI. We would have loved to evaluate this relation also for the score on retention test, but due to limited participants, we will not be able to do so.  
+We expect, for example, a small, positive linear effect of motivation on the test score of OZM and others. We will report Beta, p-value, R2. Given that we expect small effects for the process variables, we will only run univariate regression models. Multivariate regression models require a larger sample to have enough power to measure small effects. A disadvantage of this approach is that we can’t evaluate the effects of different process variables on the outcome at once, nor can we evaluate their interactions in this way. To partially overcome this disadvantage, we will evaluate the correlations between the different process variables. Example in R: cor(Motivation, Cognitive_load). We will report correlation coefficients and p-values.  
+
+```{r}
+# Make correlation matrix 
+dput(names(df))
+
+matrix <- as.matrix(df[, c("testOZM_exam", "testBI_form", "testBI_exam", 
+                      "testBI_retention", "q5", "q7")])
+
+tablePearson <- rcorr(matrix, type = "pearson")
+
+## Write to csv, round 2 decimals
+write.csv(round(tablePearson$r,2), file = "fill_date correlationtable_r.csv")
+write.csv(round(tablePearson$P,2), file = "fill_date correlationtable_p.csv")
+write.csv(round(tablePearson$n,2), file = "fill_date correlationtable_n.csv")
+
+# plot correlation matrix
+corrplot(tablePearson$r, method="circle", diag=FALSE, type="upper")
+
+# Plot advanced correlation matrix
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+corrplot(tablePearson$r, method="color", col=col(200), type="upper", 
+         addCoef.col = "black", bg = "white",
+         tl.col="black", tl.srt=45, diag=FALSE)
+
+
+```
+  
+
+#### Exam OZM and process variables
+```{r}
+# OZM and transfer_context, plot + check linear relation
+plot(testOZM_exam ~ q7, df)
+OZM1 <- lm(testOZM_exam ~ q7, df) 
+abline(OZM1) # Add line in plot
+summary(OZM1) # Get summary of model
+OZM1res <- resid(OZM1) # Get list of residuals
+
+# Produce residual vs. fitted plot - residuals evenly distributed?
+plot(fitted(OZM1), OZM1res)
+abline(0,0)
+
+# Create QQ-plot with line - residuals normal distribution?
+qqnorm(OZM1res)
+qqline(OZM1res)
+
+# Extract results: 
+ResultOZM1 <- c(Beta = round(summary(OZM1)$coefficients[2,1],2),
+                R2 = round(summary(OZM1)$r.squared,2),         
+                p = round(summary(OZM1)$coefficients[2,4],2)) 
+ResultOZM1
+
+# OZM and motivation
+#OZM2 <- lm(testOZM_exam ~ motivation, data) 
+
+#ResultOZM2 <- c(Beta = round(summary(OZM2)$coefficients[2,1],2),
+#                R2 = round(summary(OZM2)$r.squared,2),         
+#                p = round(summary(OZM2)$coefficients[2,4],2)) 
+#ResultOZM2
+
+# Combine results
+#OverviewOZM <- rbind(OZM1, OZM2, OZM3, OZM4, OZM5)
+#colnames(OverviewOZM) <- c("Beta", "R2", "p-value")
+
+```
+
+#### Formative Exam BI and process variables
+```{r}
+# Formative exam BI and transfer_context
+FBI1 <- lm(testBI_form ~ q7, df) 
+summary(FBI1)
+
+# Extract results: 
+ResultFBI1 <- c(Beta = round(summary(FBI1)$coefficients[2,1],2),
+                R2 = round(summary(FBI1)$r.squared,2),         
+                p = round(summary(FBI1)$coefficients[2,4],2)) 
+ResultFBI1
+
+# Formative exam bI and motivation
+#FBI2 <- lm(testBI_form ~ motivation, df) 
+
+#ResultFBI2 <- c(Beta = round(summary(FBI2)$coefficients[2,1],2),
+#                R2 = round(summary(FBI2)$r.squared,2),         
+#                p = round(summary(FBI2)$coefficients[2,4],2)) 
+#ResultFBI2
+
+# Combine results
+#OverviewFBI <- rbind(FBI1, FBI2, FBI3, FBI4, FBI5)
+#colnames(OverviewFBI) <- c("Beta", "R2", "p-value")
+
+```
+
+#### Final Exam BI and proces variables
+```{r}
+# Final exam BI and transfer_context
+EBI1 <- lm(testBI_exam ~ q7, df) 
+summary(EBI1)
+
+# Extract results: 
+ResultEBI1 <- c(Beta = round(summary(EBI1)$coefficients[2,1],2),
+                R2 = round(summary(EBI1)$r.squared,2),         
+                p = round(summary(EBI1)$coefficients[2,4],2)) 
+ResultEBI1
+
+# EBI and motivation
+#EBI2 <- lm(testBI_exam ~ motivation, df) 
+
+#ResultEBI2 <- c(Beta = round(summary(EBI2)$coefficients[2,1],2),
+#                R2 = round(summary(EBI2)$r.squared,2),         
+#                p = round(summary(EBI2)$coefficients[2,4],2)) 
+#ResultEBI2
+
+# Combine results
+#Overview <- rbind(EBI1, EBI2, EBI3, EBI4, EBI5)
+#colnames(Overview) <- c("Beta", "R2", "p-value")
+
+```
+
+  
+## Explorative analyses  
+Gender might also be related to the learning outcomes and process variables. Therefore, we will explore releationships between gender and outcome measures of tests and relationships between gender and process variables.  
+
+Besides we will explore the relationship between experienced learning outcomes and test scores AND experienced learning outcomes and process variables.  
+
+### Gender and outcome measures  
+```{r}
+# Put down variables
+dput(names(df))
+
+# Add gender to example dataset
+df$Gender <- rep(c("male", "female"),10)
+
+# Select variables for table one
+vars <- c("Exampleid", "testOZM_exam", "testBI_form", "testBI_exam", 
+"testBI_retention", "transfer_context")
+
+# Check distribution of variables
+
+df %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+  facet_wrap(~ key, scales = "free") +
+  geom_histogram()
+
+# Create Table 1 stratified by Gender
+tableOne <- CreateTableOne(vars = vars,  strata = c("Gender"), data = df)
+CSV <- print(tableOne, missing = TRUE, quote = F, noSpaces = T)
+write.table(CSV, file="fill_date_Table1_Gender.csv", sep= ";")
+```
+
+### Correlation matrix for all
+```{r}
+# Make correlation matrix 
+dput(names(df))
+
+#matrix_explore <- as.matrix(df[, c("testOZM_exam", "testBI_form", "testBI_exam", 
+#                      "testBI_retention","motivation", "transfer_context", "reported_presence")])
+
+matrix_explore <- as.matrix(df[, c("testOZM_exam", "testBI_form", "testBI_exam")])
+
+tablePearson_explore <- rcorr(matrix_explore, type = "pearson")
+
+## Write to csv, round 2 decimals
+write.csv(round(tablePearson_explore$r,2), file = "fill_date explore correlationtable_r.csv")
+write.csv(round(tablePearson_explore$P,2), file = "fill_date explore correlationtable_p.csv")
+write.csv(round(tablePearson_explore$n,2), file = "fill_date explore correlationtable_n.csv")
+
+# plot correlation matrix
+corrplot(tablePearson_explore$r, method="circle", diag=FALSE, type="upper")
+
+# Plot advanced correlation matrix
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+corrplot(tablePearson_explore$r, method="color", col=col(200), type="upper", 
+         addCoef.col = "black", bg = "white",
+         tl.col="black", tl.srt=45, diag=FALSE)
+```
+
+
+  
+### Experienced learning outcomes and exam scores  
+```{r}
+# Summary of experienced learning outcomes and exam scores (ELOES)
+# Summary(Experienced)
+
+# ELOES1 <- lm(testOZM_exam ~ t_concept_practice, data = df)
+# ELOES2 <- lm(testBI_form ~ t_context_context, data = df)
+# ELOES3 <- lm(testBI_exam ~ t_simple_complex, data = df)
+
+# Extract results: 
+#ResultELOES1 <- c(Beta = round(summary(ELOES1)$coefficients[2,1],2),
+#                R2 = round(summary(ELOES1)$r.squared,2),         
+#                p = round(summary(ELOES1)$coefficients[2,4],2)) 
+#ResultELOES1 
+
+#ResultELOES2 <- c(Beta = round(summary(ELOES2)$coefficients[2,1],2),
+#                R2 = round(summary(ELOES2)$r.squared,2),         
+#                p = round(summary(ELOES2)$coefficients[2,4],2)) 
+#ResultELOES2
+
+#ResultELOES2 <- c(Beta = round(summary(ELOES2)$coefficients[2,1],2),
+#                R2 = round(summary(ELOES2)$r.squared,2),         
+#                p = round(summary(ELOES2)$coefficients[2,4],2)) 
+#ResultELOES2
+
+# Combine results
+#OverviewELOES <- rbind(ResultELOES1, ResultELOES2, ResultELOES3)
+#colnames(OverviewELOT) <- c("Beta", "R2", "p-value")
+
+#OverviewELOES
+
+```
+
+### Experienced learning outcomes and process variables
+
+```{r}
+# Summary of experienced learning outcomes and process variables (ELOP)
+
+# ELOP1 <- lm(transfer_context ~ motivation, data = df)
+# ELOP2 <- lm(t_context_context ~ motivation, data = df)
+# ELOP3 <- lm(t_simple_complex ~ motivation, data = df)
+
+# Same for other process variables.
+
+# Extract results: 
+#ResultELOP1 <- c(Beta = round(summary(ELOP1)$coefficients[2,1],2),
+#                R2 = round(summary(ELOP1)$r.squared,2),         
+#                p = round(summary(ELOP1)$coefficients[2,4],2)) 
+#ResultELOP1 
+
+#ResultELOP2 <- c(Beta = round(summary(ELOP2)$coefficients[2,1],2),
+#                R2 = round(summary(ELOP2)$r.squared,2),         
+#                p = round(summary(ELOP2)$coefficients[2,4],2)) 
+#ResultELOP2
+
+# Combine results
+#OverviewELOP <- rbind(ResultELOP1, ResultELOP2, ResultELOP3)
+#colnames(OverviewELOP) <- c("Beta", "R2", "p-value")
+
+#OverviewELOP
+
+```
+
+### Reported presence and exam results
+```{r}
+# Summary of presence and exam scores (RPES)
+
+# RPES1 <- lm(testOZM_exam ~ presence_HC_MTE, data = df)
+# RPES2 <- lm(testBI_form ~ presence_WC, data = df)
+# RPES3 <- lm(testBI_exam ~ presence_COO, data = df)
+
+# Same for other process variables.
+
+# Extract results: 
+#ResultRPES1 <- c(Beta = round(summary(RPES1)$coefficients[2,1],2),
+#                R2 = round(summary(RPES1)$r.squared,2),         
+#                p = round(summary(RPES1)$coefficients[2,4],2)) 
+#ResultRPES1 
+
+#ResultRPES2 <- c(Beta = round(summary(RPES2)$coefficients[2,1],2),
+#                R2 = round(summary(RPES2)$r.squared,2),         
+#                p = round(summary(RPES2)$coefficients[2,4],2)) 
+#ResultRPES2
+
+# Combine results
+#OverviewRPES <- rbind(ResultRPES1, ResultRPES2, ResultRPES3)
+#colnames(OverviewRPES) <- c("Beta", "R2", "p-value")
+
+#OverviewRPES
+
+```
+
+
+### Reported presence and process variables
+```{r}
+# Summary of reported presence and process variables (RPPV)
+
+# RPPV1 <- lm(transfer_context ~ motivation, data = df)
+# RPPV2 <- lm(t_context_context ~ motivation, data = df)
+# RPPV3 <- lm(t_simple_complex ~ motivation, data = df)
+
+# Same for other process variables.
+
+# Extract results: 
+#ResultRPPV1 <- c(Beta = round(summary(RPPV1)$coefficients[2,1],2),
+#                R2 = round(summary(RPPV1)$r.squared,2),         
+#                p = round(summary(RPPV1)$coefficients[2,4],2)) 
+#ResultRPPV1 
+
+#ResultRPPV2 <- c(Beta = round(summary(RPPV2)$coefficients[2,1],2),
+#                R2 = round(summary(RPPV2)$r.squared,2),         
+#                p = round(summary(RPPV2)$coefficients[2,4],2)) 
+#ResultRPPV2
+
+# Combine results
+#OverviewRPPV <- rbind(ResultRPPV1, ResultRPPV2, ResultRPPV3)
+#colnames(OverviewELOP) <- c("Beta", "R2", "p-value")
+
+#OverviewRPPV
+
+```
+
+
+---  
+---
+End of script 
+---  
+---  
+

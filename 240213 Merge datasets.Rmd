@@ -1,0 +1,59 @@
+---
+title: "Merge data for DS research"
+author: "John Meeuwsen"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+## Import data
+### Import grades for Onderzoeksmethoden, Bio-informatica (formative and summative) and retention test
+```{r }
+#Example data
+example <- read.csv2("231212 Example data.csv")
+head(example)
+summary(example)
+
+df <- example
+
+# real data
+#grades <- read.csv2("")
+#head(grades)
+#summary(grades)
+
+```
+
+
+### Import questionnaire
+```{r }
+#questionnaire <- read.csv2("")
+```
+
+
+### Merge datasets
+```{r}
+# Perform the merge in a separate folder, only accesible for the data manager.
+# Afterwards load pseudonimized data.
+
+# df <- merge(grades, questionnaire, by = "studentnr")
+
+# Check how much rows are not merged. 
+# unmatched_rows_grades <- grades[!(grades$studentnr %in% df$studentnr), ]
+# Nr of unmatched rows:
+
+# unmatched_rows_questionnaires <- questionnaires[!(questionnaires$studentnr %in% df$studentnr), ]
+# Nr of unmatched rows:
+
+
+summary(df)
+
+
+```
+
+### Write pseudonimized csv
+```{r}
+#dfpseudonimized <- df[,-c("studentnr")]
+
+#write.csv(file = "date_dfpseudonimized.csv")
+
+```
+
